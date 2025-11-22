@@ -177,11 +177,11 @@ namespace MissionPlanner.GCSViews
             ThemeManager.ApplyThemeTo(flightPlanner);
             middlePanel.Controls.Add(flightPlanner);
 
-            // --- Bölüm 3: Sağ Panel (Sinyal Durumu vb.) ---
+            // --- Bölüm 3: Sağ Panel (Sinyal Durumu, Server, Log vb.) ---
             var rightPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
             try
             {
-                // Sağ panel: daha zengin düzen (üst toggles, aksiyon butonları, hedef seçme, telemetri, log)
+                // Ana iskelet (5 Satır)
                 var mainLayout = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
@@ -189,24 +189,27 @@ namespace MissionPlanner.GCSViews
                     ColumnCount = 1,
                     RowCount = 5,
                 };
-                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));   // üst toggle butonlar
-                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));  // aksiyon butonları (3 sütun)
-                mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 60));    // hedef seçme (büyür)
-                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));   // telemetri butonları
-                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));  // log alanı
+                
+                // Satır yüksekliklerini ayarlıyoruz. 
+                // ORTA ALAN esnek bırakıldı ki ekran değiştikçe burada scroll/resize düzgün olsun.
+                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));   // Toggle Butonlar (En üst)
+                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 160));  // Aksiyon Butonları
+                mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // ORTA ALAN (Server + Hedef Listesi) - Esnek
+                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));   // Telemetri Butonları
+                mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 140));  // Log Alanı
 
-                // 1) Üst toggle buton çubuğu
+                // -----------------------------------------------------------------------
+                // 1) Üst Toggle Buton Çubuğu
+                // -----------------------------------------------------------------------
                 var topBar = new FlowLayoutPanel
                 {
                     Dock = DockStyle.Fill,
                     FlowDirection = FlowDirection.LeftToRight,
-                    Padding = new Padding(6),
+                    Padding = new Padding(2),
                     BackColor = Color.Transparent,
-                    AutoSize = false,
                     WrapContents = false
                 };
 
-                // Helper to apply the required button style
                 Action<Button> ApplyStandardButtonStyle = (b) =>
                 {
                     b.BackColor = Color.White;
@@ -214,102 +217,55 @@ namespace MissionPlanner.GCSViews
                     b.FlatStyle = FlatStyle.Flat;
                     b.FlatAppearance.BorderSize = 0;
                     b.Cursor = Cursors.Hand;
-                    b.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                    b.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
                 };
 
-                // Helper to create small square toggle/button with single attached ON/OFF indicator
                 Func<string, EventHandler, Control> makeToggle = (text, click) =>
                 {
-                    // Flow panel that holds button and indicator tightly (no gap)
                     var wrapper = new FlowLayoutPanel
                     {
-                        FlowDirection = FlowDirection.LeftToRight,
                         AutoSize = true,
-                        Margin = new Padding(4, 6, 4, 6), // wrapper ile diğer toggle'lar arasındaki mesafe
-                        Padding = new Padding(0),
-                        BackColor = Color.Transparent,
+                        FlowDirection = FlowDirection.LeftToRight,
+                        Margin = new Padding(2),
                         WrapContents = false
                     };
-
-                    // Main toggle button
-                    var b = new Button
-                    {
-                        Text = text,
-                        Size = new Size(64, 26),
-                        Margin = new Padding(0),
-                    };
+                    var b = new Button { Text = text, Size = new Size(50, 24), Margin = new Padding(0) };
                     ApplyStandardButtonStyle(b);
-
-                    // Single indicator label (tek kontrol; OFF veya ON gösterir)
                     var indicator = new Label
                     {
-                        Text = "OFF",
-                        Size = new Size(40, 26),           // button ile aynı yükseklik
-                        Margin = new Padding(0),
-                        TextAlign = ContentAlignment.MiddleCenter,
-                        BackColor = Color.Red,             // OFF başlangıç rengi
-                        ForeColor = Color.White,
-                        Font = new Font("Segoe UI", 8F, FontStyle.Bold),
-                        BorderStyle = BorderStyle.FixedSingle
+                        Text = "OFF", Size = new Size(35, 24), Margin = new Padding(0),
+                        TextAlign = ContentAlignment.MiddleCenter, BackColor = Color.Red, ForeColor = Color.White,
+                        Font = new Font("Segoe UI", 7F, FontStyle.Bold), BorderStyle = BorderStyle.FixedSingle
                     };
-
-                    // toggle işlevi (tek bir yerde)
-                    Action toggle = () =>
-                    {
-                        if (indicator.BackColor == Color.Green)
-                        {
-                            // ON -> OFF
-                            indicator.BackColor = Color.Red;
-                            indicator.ForeColor = Color.White;
-                            indicator.Text = "OFF";
-                        }
-                        else
-                        {
-                            // OFF -> ON
-                            indicator.BackColor = Color.Green;
-                            indicator.ForeColor = Color.White;
-                            indicator.Text = "ON";
-                        }
+                    
+                    Action toggle = () => {
+                        bool isOn = indicator.BackColor == Color.Green;
+                        indicator.BackColor = isOn ? Color.Red : Color.Green;
+                        indicator.Text = isOn ? "OFF" : "ON";
                     };
-
-                    // Hem buton hem de gösterge tıklaması toggle edecek
-                    b.Click += (s, e) =>
-                    {
-                        toggle();
-                        click?.Invoke(s, e);
-                    };
-                    indicator.Click += (s, e) =>
-                    {
-                        toggle();
-                        click?.Invoke(s, e);
-                    };
-
-                    // Buton ve göstergeleri yapışık ekle (aralarında mesafe yok)
+                    b.Click += (s, e) => { toggle(); click?.Invoke(s, e); };
+                    indicator.Click += (s, e) => { toggle(); click?.Invoke(s, e); };
+                    
                     wrapper.Controls.Add(b);
                     wrapper.Controls.Add(indicator);
-
                     return wrapper;
                 };
 
-                // Örnek toggles (kullanıcı isteğine göre isimlendirme ve renkler)
-                var bQR = makeToggle("QR", null);
-                var bHSS = makeToggle("HSS", null);
-                var bLock = makeToggle("Kilitleme", null);
-
-                topBar.Controls.Add(bQR);
-                topBar.Controls.Add(bHSS);
-                topBar.Controls.Add(bLock);
-
+                topBar.Controls.Add(makeToggle("QR", null));
+                topBar.Controls.Add(makeToggle("HSS", null));
+                topBar.Controls.Add(makeToggle("Kilit", null));
                 ThemeManager.ApplyThemeTo(topBar);
 
-                // 2) Aksiyon butonları - 3 sütun, her sütunda dikey buton yığını
+                // -----------------------------------------------------------------------
+                // 2) Aksiyon Butonları (3 Sütun)
+                // -----------------------------------------------------------------------
                 var actionsLayout = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill,
                     ColumnCount = 3,
                     RowCount = 1,
                     BackColor = Color.Transparent,
-                    Padding = new Padding(8)
+                    Padding = new Padding(2)
                 };
                 actionsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
                 actionsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
@@ -317,238 +273,179 @@ namespace MissionPlanner.GCSViews
 
                 Func<string, Button> makeAction = (txt) =>
                 {
-                    var btn = new Button
-                    {
-                        Text = txt,
-                        Dock = DockStyle.Top,
-                        Height = 34,
-                        Margin = new Padding(6)
-                    };
-                    btn.BackColor = Color.White;
-                    btn.ForeColor = Color.Black;
-                    btn.FlatStyle = FlatStyle.Flat;
-                    btn.FlatAppearance.BorderSize = 0;
-                    btn.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                    var btn = new Button { Text = txt, Dock = DockStyle.Top, Height = 30, Margin = new Padding(3) };
+                    ApplyStandardButtonStyle(btn);
                     return btn;
                 };
+                
+                Action<int, string[]> fillCol = (colIndex, texts) => {
+                    var p = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, AutoScroll = true };
+                    foreach(var t in texts) p.Controls.Add(makeAction(t));
+                    actionsLayout.Controls.Add(p, colIndex, 0);
+                };
 
-                var col1 = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, AutoScroll = true, BackColor = Color.Transparent };
-                col1.Controls.Add(makeAction("QR detected"));
-                col1.Controls.Add(makeAction("Dalış Durumu"));
-
-                var col2 = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, AutoScroll = true, BackColor = Color.Transparent };
-                col2.Controls.Add(makeAction("Alanları Yerleştir"));
-                col2.Controls.Add(makeAction("Alanları Sıfırla"));
-
-                var col3 = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, AutoScroll = true, BackColor = Color.Transparent };
-                col3.Controls.Add(makeAction("Hedefleri Göster"));
-                col3.Controls.Add(makeAction("Gücel Hedef"));
-
-                actionsLayout.Controls.Add(col1, 0, 0);
-                actionsLayout.Controls.Add(col2, 1, 0);
-                actionsLayout.Controls.Add(col3, 2, 0);
-
+                fillCol(0, new[] { "QR Det.", "Dalış" });
+                fillCol(1, new[] { "Alan Yerleş", "Alan Sıfırla" });
+                fillCol(2, new[] { "Hedefler", "Güncel Hedef" });
                 ThemeManager.ApplyThemeTo(actionsLayout);
 
-                // 3) Hedef seçme modu (sağ sütundaki uzun modüle benzer)
-                var targetPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(8) };
+                // -----------------------------------------------------------------------
+                // 3) ORTA PANEL: Server Girişi + Düşman Listesi + Hedef Seçimi
+                // -----------------------------------------------------------------------
+                var middleSectionPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(4) };
 
-                // --- Buraya Sunucu kontrol panelini ekliyoruz ---
-                var serverHost = new Panel { Dock = DockStyle.Top, Height = 120, BackColor = Color.Transparent };
-                try
-                {
-                    // Server top row: textbox + connect + fetch + login UI + takım ID
-                    var serverTop = new Panel { Dock = DockStyle.Top, Height = 36, BackColor = Color.Transparent };
-                    txtServerIp = new TextBox { Text = "http://127.0.0.25:5000", Left = 8, Top = 6, Width = 260 };
-                    btnServerConnect = new Button { Text = "Bağlan", Left = 276, Top = 6, Width = 80 };
-                    btnToggleFetch = new Button { Text = "Fetch: Kapalı", Left = 362, Top = 6, Width = 100 };
+                var targetSplit = new SplitContainer 
+                { 
+                    Dock = DockStyle.Fill, 
+                    Orientation = Orientation.Horizontal,
+                    SplitterWidth = 4,
+                    BackColor = SystemColors.ControlDark 
+                };
 
-                    // Login UI (kullanıcı adı / şifre / giriş)
-                    txtUsername = new TextBox { Text = "takimkadi", Left = 472, Top = 6, Width = 120 };
-                    txtPassword = new TextBox { Text = "takimsifresi", Left = 600, Top = 6, Width = 120, UseSystemPasswordChar = true };
-                    btnLogin = new Button { Text = "Giriş", Left = 728, Top = 6, Width = 60 };
+                // --- ÜST KISIM: SERVER GİRİŞİ (Auto-Wrap özellikli) ---
+                var serverHostPanel = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
+                
+                var serverControlsFlow = new FlowLayoutPanel 
+                { 
+                    Dock = DockStyle.Top, 
+                    AutoSize = true, 
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                    FlowDirection = FlowDirection.LeftToRight,
+                    WrapContents = true,
+                    Padding = new Padding(0,0,0,5)
+                };
 
-                    // Yeni: takım ID label + textbox (UI tarafı burada)
-                    lblTeamNo = new Label { Text = "Takım ID:", Left = 800, Top = 8, AutoSize = true, ForeColor = ThemeManager.TextColor };
-                    txtTeamNo = new TextBox { Text = "20", Left = 860, Top = 6, Width = 60 };
+                // Küçültülmüş boyutlar, artık sabit Left/Top yok
+                txtServerIp = new TextBox { Text = "http://127.0.0.1:5000", Width = 140, Height = 22 };
+                btnServerConnect = new Button { Text = "Bağlan", Width = 60, Height = 24, BackColor = Color.White };
+                btnToggleFetch = new Button { Text = "Fetch", Width = 60, Height = 24, BackColor = Color.White };
+                
+                txtUsername = new TextBox { Text = "kadi", Width = 80 };
+                txtPassword = new TextBox { Text = "pass", Width = 80, UseSystemPasswordChar = true };
+                btnLogin = new Button { Text = "Giriş", Width = 50, Height = 24, BackColor = Color.White };
+                
+                lblTeamNo = new Label { Text = "Takım:", AutoSize = true, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(0,6,0,0), ForeColor = ThemeManager.TextColor };
+                txtTeamNo = new TextBox { Text = "20", Width = 40 };
 
-                    // event handler'lar artık yerel implementasyon içeriyor
-                    btnServerConnect.Click += BtnServerConnect_Click;
-                    btnToggleFetch.Click += BtnToggleFetch_Click;
-                    btnLogin.Click += BtnLogin_Click;
+                // Eventler korunuyor
+                btnServerConnect.Click += BtnServerConnect_Click;
+                btnToggleFetch.Click += BtnToggleFetch_Click;
+                btnLogin.Click += BtnLogin_Click;
+                txtTeamNo.TextChanged += TxtTeamNo_TextChanged;
 
-                    // takım ID değişimini AnafartaTab handle eder ve yerel state'e yazar
-                    txtTeamNo.TextChanged += TxtTeamNo_TextChanged;
-
-                    serverTop.Controls.Add(txtServerIp);
-                    serverTop.Controls.Add(btnServerConnect);
-                    serverTop.Controls.Add(btnToggleFetch);
-                    serverTop.Controls.Add(txtUsername);
-                    serverTop.Controls.Add(txtPassword);
-                    serverTop.Controls.Add(btnLogin);
-                    serverTop.Controls.Add(lblTeamNo);
-                    serverTop.Controls.Add(txtTeamNo);
-
-                    // En altta: düşman listesi
-                    lvEnemies = new ListView
-                    {
-                        View = View.Details,
-                        Dock = DockStyle.Fill,
-                        FullRowSelect = true,
-                        BackColor = Color.White
-                    };
-                    chId = new ColumnHeader { Text = "ID", Width = 60 };
-                    chDistance = new ColumnHeader { Text = "Mesafe (m)", Width = 100 };
-                    chLat = new ColumnHeader { Text = "Enlem", Width = 120 };
-                    chLon = new ColumnHeader { Text = "Boylam", Width = 120 };
-                    chAlt = new ColumnHeader { Text = "İrtifa", Width = 80 };
-                    lvEnemies.Columns.AddRange(new[] { chId, chDistance, chLat, chLon, chAlt });
-
-                    serverHost.Controls.Add(lvEnemies);
-                    serverHost.Controls.Add(serverTop);
+                Control[] srvCtrls = { txtServerIp, btnServerConnect, btnToggleFetch, txtUsername, txtPassword, btnLogin, lblTeamNo, txtTeamNo };
+                foreach(var c in srvCtrls) {
+                    c.Margin = new Padding(2);
+                    serverControlsFlow.Controls.Add(c);
                 }
-                catch { }
 
-                targetPanel.Controls.Add(serverHost);
-                // --- server panel eklendi ---
-
-                var targetHeader = new Label { Text = "Hedef Seç", Dock = DockStyle.Top, Height = 26, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ThemeManager.TextColor };
-                var listsWrapper = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = Color.Transparent };
-                listsWrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-                listsWrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-                listsWrapper.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-                listsWrapper.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-
-                var lstIds = new ListBox { Dock = DockStyle.Fill, BackColor = Color.FromArgb(50, 50, 50), ForeColor = ThemeManager.TextColor, BorderStyle = BorderStyle.None };
-                for (int i = 1; i <= 12; i++) lstIds.Items.Add(i.ToString()); // örnek ID listesi
-
-                var lstViewAngle = new ListBox { Dock = DockStyle.Fill, BackColor = Color.FromArgb(60, 60, 60), ForeColor = ThemeManager.TextColor, BorderStyle = BorderStyle.None };
-                lstViewAngle.Items.Add("X"); // placeholder
-
-                var sendBtn = new Button
+                // Düşman Listesi
+                lvEnemies = new ListView
                 {
-                    Text = "Gönder",
+                    View = View.Details,
                     Dock = DockStyle.Fill,
-                    Height = 30,
-                    FlatStyle = FlatStyle.Flat
+                    FullRowSelect = true,
+                    BackColor = Color.White,
+                    GridLines = true
                 };
-                sendBtn.BackColor = Color.White;
-                sendBtn.ForeColor = Color.Black;
-                sendBtn.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-                sendBtn.FlatAppearance.BorderSize = 0;
+                lvEnemies.Columns.Add("ID", 40);
+                lvEnemies.Columns.Add("Dist", 50);
+                lvEnemies.Columns.Add("Lat", 70);
+                lvEnemies.Columns.Add("Lon", 70);
+                lvEnemies.Columns.Add("Alt", 50);
 
-                var autoLockBtn = new Button
-                {
-                    Text = "Auto kilitleme",
-                    Dock = DockStyle.Fill,
-                    Height = 30,
-                    FlatStyle = FlatStyle.Flat
+                // Z-order: önce Fill olan, sonra Top flow
+                serverHostPanel.Controls.Add(lvEnemies);
+                serverHostPanel.Controls.Add(serverControlsFlow);
+
+                targetSplit.Panel1.Controls.Add(serverHostPanel);
+
+                // --- ALT KISIM: HEDEF SEÇİMİ ---
+                var selectionPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
+                selectionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+                selectionPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+                selectionPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                selectionPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
+
+                var lstIds = new ListBox { Dock = DockStyle.Fill, BackColor = Color.FromArgb(50,50,50), ForeColor = Color.White };
+                for (int i = 1; i <= 5; i++) lstIds.Items.Add(i.ToString());
+                
+                var lstViewAngle = new ListBox { Dock = DockStyle.Fill, BackColor = Color.FromArgb(60,60,60), ForeColor = Color.White };
+                lstViewAngle.Items.Add("Açı Yok");
+
+                var btnSend = new Button { Text = "Gönder", Dock = DockStyle.Fill, BackColor = Color.White, Margin = new Padding(1) };
+                var btnAuto = new Button { Text = "Oto Kilit", Dock = DockStyle.Fill, BackColor = Color.White, Margin = new Padding(1) };
+
+                selectionPanel.Controls.Add(lstIds, 0, 0);
+                selectionPanel.Controls.Add(lstViewAngle, 1, 0);
+                selectionPanel.Controls.Add(btnSend, 0, 1);
+                selectionPanel.Controls.Add(btnAuto, 1, 1);
+
+                var headerLbl = new Label { Text = "Hedef Seçimi", Dock = DockStyle.Top, Height=20, BackColor=Color.Gray, ForeColor=Color.White, TextAlign=ContentAlignment.MiddleLeft };
+                
+                targetSplit.Panel2.Controls.Add(selectionPanel);
+                targetSplit.Panel2.Controls.Add(headerLbl);
+
+                middleSectionPanel.Controls.Add(targetSplit);
+                ThemeManager.ApplyThemeTo(middleSectionPanel);
+
+                // -----------------------------------------------------------------------
+                // 4) Telemetri Butonları
+                // -----------------------------------------------------------------------
+                var telemetryBar = new FlowLayoutPanel 
+                { 
+                    Dock = DockStyle.Fill, 
+                    FlowDirection = FlowDirection.LeftToRight, 
+                    Padding = new Padding(2), 
+                    BackColor = Color.Transparent 
                 };
-                autoLockBtn.BackColor = Color.White;
-                autoLockBtn.ForeColor = Color.Black;
-                autoLockBtn.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-                autoLockBtn.FlatAppearance.BorderSize = 0;
-
-                var bottomBtns = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, BackColor = Color.Transparent };
-                bottomBtns.Controls.Add(sendBtn);
-                bottomBtns.Controls.Add(autoLockBtn);
-
-                listsWrapper.Controls.Add(lstIds, 0, 0);
-                listsWrapper.Controls.Add(lstViewAngle, 1, 0);
-                listsWrapper.Controls.Add(bottomBtns, 0, 1);
-                listsWrapper.SetColumnSpan(bottomBtns, 2);
-
-                targetPanel.Controls.Add(listsWrapper);
-                targetPanel.Controls.Add(targetHeader);
-                ThemeManager.ApplyThemeTo(targetPanel);
-
-                // 4) Telemetry butonları (alt sıra)
-                var telemetryBar = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8), BackColor = Color.Transparent };
                 Func<string, Button> makeTele = (txt) =>
                 {
-                    var b = new Button
-                    {
-                        Text = txt,
-                        Size = new Size(96, 36),
-                        Margin = new Padding(8)
-                    };
-                    b.BackColor = Color.White;
-                    b.ForeColor = Color.Black;
-                    b.FlatStyle = FlatStyle.Flat;
-                    b.FlatAppearance.BorderSize = 0;
-                    b.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+                    var b = new Button { Text = txt, Size = new Size(80, 30), Margin = new Padding(3), BackColor = Color.White };
+                    b.FlatStyle = FlatStyle.Flat; b.FlatAppearance.BorderSize=0;
                     return b;
                 };
                 telemetryBar.Controls.Add(makeTele("3G"));
-                telemetryBar.Controls.Add(makeTele("Ubiquiti"));
-                telemetryBar.Controls.Add(makeTele("Telemetri"));
-                telemetryBar.Controls.Add(makeTele("Etc."));
+                telemetryBar.Controls.Add(makeTele("Ubi"));
+                telemetryBar.Controls.Add(makeTele("Telem"));
                 ThemeManager.ApplyThemeTo(telemetryBar);
 
-                // 5) Log alanı + collapse butonu (bu log alanı şimdi iki dikey bölmeye ayrıldı)
-                var logArea = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(30, 30, 30), Padding = new Padding(6) };
-                var logHeader = new Panel { Dock = DockStyle.Top, Height = 28, BackColor = Color.FromArgb(60, 60, 60) };
-                var lblLogs = new Label { Text = "Logs", Dock = DockStyle.Left, Width = 80, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ThemeManager.TextColor };
-                var btnCollapse = new Button
-                {
-                    Text = "Collapse",
-                    Dock = DockStyle.Right,
-                    Width = 96,
-                    FlatStyle = FlatStyle.Flat
-                };
-                btnCollapse.BackColor = Color.White;
-                btnCollapse.ForeColor = Color.Black;
-                btnCollapse.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-                btnCollapse.FlatAppearance.BorderSize = 0;
-
-                btnCollapse.Click += (s, e) =>
-                {
-                    try
-                    {
-                        // collapse: log alanını gizle / göster (görsel işlev)
-                        logArea.Visible = !logArea.Visible;
-                    }
-                    catch { }
+                // -----------------------------------------------------------------------
+                // 5) Log Alanı
+                // -----------------------------------------------------------------------
+                var logArea = new Panel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(30, 30, 30), Padding = new Padding(2) };
+                var logHeader = new Panel { Dock = DockStyle.Top, Height = 24, BackColor = Color.FromArgb(60, 60, 60) };
+                var lblLogs = new Label { Text = "Logs", Dock = DockStyle.Left, Width = 60, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.White };
+                var btnCollapse = new Button { Text = "Gizle", Dock = DockStyle.Right, Width = 60, BackColor = Color.LightGray, FlatStyle = FlatStyle.Flat };
+                
+                btnCollapse.Click += (s, e) => {
+                    logArea.Visible = !logArea.Visible;
                 };
 
                 logHeader.Controls.Add(btnCollapse);
                 logHeader.Controls.Add(lblLogs);
 
-                // Split container for two vertical log panes
-                var logSplit = new SplitContainer
-                {
-                    Dock = DockStyle.Fill,
-                    Orientation = Orientation.Vertical,
-                    SplitterWidth = 6,
-                    BackColor = Color.Transparent,
-                    Panel1MinSize = 40,
-                    Panel2MinSize = 40
-                };
-
-                // Left server area (keşfettiğimiz ilk/varsayılan server)
-                lblServerHeaderA = new Label { Text = "Sunucu A", Dock = DockStyle.Top, Height = 20, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ThemeManager.TextColor };
-                lstLogs = new ListBox { Dock = DockStyle.Fill, BackColor = Color.Black, ForeColor = Color.LightGreen, BorderStyle = BorderStyle.None };
+                var logSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, SplitterWidth = 4, BackColor = Color.Gray };
+                
+                lblServerHeaderA = new Label { Text = "Server A", Dock = DockStyle.Top, Height=18, ForeColor=Color.White, BackColor=Color.Black };
+                lstLogs = new ListBox { Dock = DockStyle.Fill, BackColor = Color.Black, ForeColor = Color.Lime, BorderStyle = BorderStyle.None };
                 logSplit.Panel1.Controls.Add(lstLogs);
                 logSplit.Panel1.Controls.Add(lblServerHeaderA);
 
-                // Right server area (ikinci server)
-                lblServerHeaderB = new Label { Text = "Sunucu B", Dock = DockStyle.Top, Height = 20, TextAlign = ContentAlignment.MiddleLeft, ForeColor = ThemeManager.TextColor };
-                lstServerLogsB = new ListBox { Dock = DockStyle.Fill, BackColor = Color.Black, ForeColor = Color.LightGreen, BorderStyle = BorderStyle.None };
+                lblServerHeaderB = new Label { Text = "Server B", Dock = DockStyle.Top, Height=18, ForeColor=Color.White, BackColor=Color.Black };
+                lstServerLogsB = new ListBox { Dock = DockStyle.Fill, BackColor = Color.Black, ForeColor = Color.Lime, BorderStyle = BorderStyle.None };
                 logSplit.Panel2.Controls.Add(lstServerLogsB);
                 logSplit.Panel2.Controls.Add(lblServerHeaderB);
 
-                ThemeManager.ApplyThemeTo(logArea);
-
-                // add split and header into logArea
                 logArea.Controls.Add(logSplit);
                 logArea.Controls.Add(logHeader);
 
-                ThemeManager.ApplyThemeTo(logArea);
-
-                // mainLayout'e ekle
+                // -----------------------------------------------------------------------
+                // ANA LAYOUT'A EKLEME
+                // -----------------------------------------------------------------------
                 mainLayout.Controls.Add(topBar, 0, 0);
                 mainLayout.Controls.Add(actionsLayout, 0, 1);
-                mainLayout.Controls.Add(targetPanel, 0, 2);
+                mainLayout.Controls.Add(middleSectionPanel, 0, 2);
                 mainLayout.Controls.Add(telemetryBar, 0, 3);
                 mainLayout.Controls.Add(logArea, 0, 4);
 
@@ -556,15 +453,8 @@ namespace MissionPlanner.GCSViews
             }
             catch (Exception ex)
             {
-                rightPanel.Controls.Add(new Label
-                {
-                    Text = "Bölüm 3 (Sinyal durumu yüklenemedi): " + ex.Message,
-                    Dock = DockStyle.Fill,
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    AutoSize = false,
-                    ForeColor = ThemeManager.TextColor
-                });
-                ThemeManager.ApplyThemeTo(rightPanel);
+                 // Hata yakalama
+                 rightPanel.Controls.Add(new Label { Text = "UI Hatası: " + ex.Message, Dock = DockStyle.Fill, ForeColor = Color.Red });
             }
 
             // Panelleri ana splitter'lara ata
@@ -624,34 +514,34 @@ namespace MissionPlanner.GCSViews
         private void TxtTeamNo_TextChanged(object sender, EventArgs e)
         {
             try
-            {
-                var tb = sender as TextBox;
-                if (tb == null) return;
-                var txt = (tb.Text ?? "").Trim();
-                if (string.IsNullOrEmpty(txt)) return;
+			{
+				var tb = sender as TextBox;
+				if (tb == null) return;
+				var txt = (tb.Text ?? "").Trim();
+				if (string.IsNullOrEmpty(txt)) return;
 
-                if (int.TryParse(txt, out int val) && val >= 0)
-                {
-                    // artık yerel state güncelleniyor
-                    _teamNumber = val;
-                    AppendLogInternal($"Takım ID set: {val}");
-                }
-                else
-                {
-                    // Geçersizse UI'ya yerel değeri geri yaz
-                    try
-                    {
-                        var cur = _teamNumber;
-                        if (txtTeamNo.Text != cur.ToString()) txtTeamNo.Text = cur.ToString();
-                    }
-                    catch { }
-                }
-            }
-            catch (Exception ex)
-            {
-                // minimal logging
-                try { AppendLogInternal("TxtTeamNo_TextChanged hata: " + ex.Message); } catch { }
-            }
+				if (int.TryParse(txt, out int val) && val >= 0)
+				{
+					// artık yerel state güncelleniyor
+					_teamNumber = val;
+					AppendLogInternal($"Takım ID set: {val}");
+				}
+				else
+				{
+					// Geçersizse UI'ya yerel değeri geri yaz
+					try
+					{
+						var cur = _teamNumber;
+						if (txtTeamNo.Text != cur.ToString()) txtTeamNo.Text = cur.ToString();
+					}
+					catch { }
+				}
+			}
+			catch (Exception ex)
+			{
+				// minimal logging
+				try { AppendLogInternal("TxtTeamNo_TextChanged hata: " + ex.Message); } catch { }
+			}
         }
 
         // küçük yardımcı: AnafartaTab içindeki genel log listesine ekleme (eski davranış korunur)
