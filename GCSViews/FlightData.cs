@@ -33,6 +33,12 @@ using LogAnalyzer = MissionPlanner.Utilities.LogAnalyzer;
 using TableLayoutPanelCellPosition = System.Windows.Forms.TableLayoutPanelCellPosition;
 using UnauthorizedAccessException = System.UnauthorizedAccessException;
 
+///////////////////////////////////////////////////////////////////////////////
+
+using System.Runtime.InteropServices;
+
+///////////////////////////////////////////////////////////////////////////////
+
 // written by michael oborne
 
 namespace MissionPlanner.GCSViews
@@ -46,6 +52,178 @@ namespace MissionPlanner.GCSViews
         public static myGMAP mymap;
         public static bool threadrun;
         public SplitContainer MainHcopy;
+
+        ///////////////////////////////////////////////////////////////////////////////
+
+        // ============================================================================
+        // GSTREAMER DEĞİŞKENLERİ (Sadece burada tanımlı olmalı)
+        // ============================================================================
+        private Panel pnlGstContainer;
+        private Panel pnlVideoDisplay;
+        private TextBox txtRtspUrl;
+        private Button btnGstPlay;
+        private Button btnGstStop;
+        private Gst.Pipeline _gstPipeline;
+        // ============================================================================
+
+        private void InitializeGStreamerPanel()
+        {
+            try
+            {
+                // 1. Ana Taşıyıcı Panel
+                pnlGstContainer = new Panel();
+                pnlGstContainer.Height = 320;
+                pnlGstContainer.Dock = DockStyle.Fill; // Paneli dolduracak şekilde ayarla
+                pnlGstContainer.BackColor = Color.FromArgb(20, 20, 20);
+                pnlGstContainer.Padding = new Padding(2);
+
+                // 2. Kontrol Şeridi
+                Panel pnlControls = new Panel();
+                pnlControls.Height = 30;
+                pnlControls.Dock = DockStyle.Top;
+                pnlControls.BackColor = Color.FromArgb(40, 40, 40);
+
+                txtRtspUrl = new TextBox();
+                txtRtspUrl.Text = "rtsp://127.0.0.1:8554/test";
+                txtRtspUrl.Location = new Point(5, 5);
+                txtRtspUrl.Width = 250;
+                txtRtspUrl.BackColor = Color.Black;
+                txtRtspUrl.ForeColor = Color.Lime;
+
+                btnGstPlay = new Button { Text = "Başlat", Location = new Point(260, 3), Height = 24, BackColor = Color.Gray, ForeColor = Color.White };
+                btnGstPlay.Click += (s, e) => StartGStreamer(txtRtspUrl.Text);
+
+                btnGstStop = new Button { Text = "Durdur", Location = new Point(340, 3), Height = 24, BackColor = Color.Gray, ForeColor = Color.White };
+                btnGstStop.Click += (s, e) => StopGStreamer();
+
+                pnlControls.Controls.Add(txtRtspUrl);
+                pnlControls.Controls.Add(btnGstPlay);
+                pnlControls.Controls.Add(btnGstStop);
+
+                // 3. Video Render Alanı
+                pnlVideoDisplay = new Panel();
+                pnlVideoDisplay.Dock = DockStyle.Fill;
+                pnlVideoDisplay.BackColor = Color.Black;
+                pnlVideoDisplay.BorderStyle = BorderStyle.Fixed3D;
+
+                pnlGstContainer.Controls.Add(pnlVideoDisplay);
+                pnlGstContainer.Controls.Add(pnlControls);
+
+                // 4. HUD ve sekmeler arasına göm
+                if (this.SubMainLeft != null)
+                {
+                    // Yeni bir SplitContainer oluşturarak HUD, Video ve Tabları ayır
+                    var middleSplit = new SplitContainer()
+                    {
+                        Dock = DockStyle.Fill,
+                        Orientation = Orientation.Horizontal,
+                        SplitterDistance = 320, // Video panelinin başlangıç yüksekliği
+                        BackColor = Color.Transparent,
+                        Panel1MinSize = 50,
+                        Panel2MinSize = 50,
+                    };
+
+                    // Mevcut sekmeleri yeni splitter'ın alt paneline taşı
+                    middleSplit.Panel2.Controls.Add(this.tabControlactions);
+                    this.tabControlactions.Dock = DockStyle.Fill;
+
+                    // Video panelini yeni splitter'ın üst paneline ekle
+                    middleSplit.Panel1.Controls.Add(pnlGstContainer);
+
+                    // Yeni oluşturulan splitter'ı SubMainLeft'in alt paneline ekle
+                    this.SubMainLeft.Panel2.Controls.Add(middleSplit);
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error("GStreamer Panel Init Hatası: " + ex.Message);
+            }
+        }
+
+        private void StartGStreamer(string url)
+        {
+            StopGStreamer(); // Önce varsa eskisini kapat
+
+            if (string.IsNullOrEmpty(url)) return;
+
+            try
+            {
+                // DÜZELTME BURADA YAPILDI:
+                // IsInitialized kontrolü kaldırıldı çünkü kütüphanenizde yok.
+                // Bunun yerine Init() metodunu güvenli bir blok içinde çağırıyoruz.
+                try
+                {
+                    Gst.Application.Init();
+                }
+                catch
+                {
+                    // Zaten başlatılmışsa veya hata verirse yoksay
+                }
+
+                // Basit ve güvenilir H264 pipeline
+                // Eğer görüntü gelmezse pipeline string'ini kameranıza göre güncellemek gerekebilir.
+                string pipelineStr = $"rtspsrc location={url} latency=0 ! rtph264depay ! h264parse ! avdec_h264 ! videoconvert ! autovideosink";
+
+                // Pipeline oluştur
+                _gstPipeline = (Gst.Pipeline)Gst.Parse.Launch(pipelineStr);
+
+                // Bus üzerinden pencere handle işlemini yakala
+                Gst.Bus bus = _gstPipeline.Bus;
+                bus.EnableSyncMessageEmission();
+
+                bus.SyncMessage += (o, args) =>
+                {
+                    // Namespace karışıklığını önlemek için tam yol
+                    Gst.Message msg = args.Message;
+
+                    // Bu kontrol kütüphane sürümüne göre değişebildiği için
+                    // en güvenli yöntem try-catch ile handle atamaktır.
+                    try
+                    {
+                        // Mesajın VideoOverlay olup olmadığını kontrol et
+                        if (Gst.Video.Global.IsVideoOverlayPrepareWindowHandleMessage(msg))
+                        {
+                            Gst.Element src = msg.Src as Gst.Element;
+                            if (src != null)
+                            {
+                                Gst.Video.VideoOverlayAdapter adapter = new Gst.Video.VideoOverlayAdapter(src.Handle);
+                                adapter.WindowHandle = pnlVideoDisplay.Handle;
+                                adapter.HandleEvents(true);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Handle hatası olursa yoksay
+                    }
+                };
+
+                _gstPipeline.SetState(Gst.State.Playing);
+            }
+            catch (Exception ex)
+            {
+                // MessageBox yerine log kullanmak daha güvenlidir ama
+                // hatayı görmek için burayı açık bırakıyoruz.
+                CustomMessageBox.Show("GStreamer Hatası: " + ex.Message);
+            }
+        }
+
+        private void StopGStreamer()
+        {
+            if (_gstPipeline != null)
+            {
+                try
+                {
+                    _gstPipeline.SetState(Gst.State.Null);
+                    _gstPipeline.Dispose();
+                }
+                catch { }
+                _gstPipeline = null;
+            }
+        }
+
+        ///////////////////////////////////////////////////////////////////////////////
+
         internal static GMapOverlay geofence;
         internal static GMapOverlay photosoverlay;
         internal static GMapOverlay poioverlay = new GMapOverlay("POI");
@@ -238,6 +416,10 @@ namespace MissionPlanner.GCSViews
             log.Info("Ctor Start");
 
             InitializeComponent();
+
+            ///////////////////////////////////////////////////////////////////////////
+            InitializeGStreamerPanel();
+            ///////////////////////////////////////////////////////////////////////////
 
             log.Info("Components Done");
 
