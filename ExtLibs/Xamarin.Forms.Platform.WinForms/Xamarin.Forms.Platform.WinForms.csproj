@@ -27,6 +27,7 @@
     <Compile Update="PlatformRenderer.cs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
     <PackageReference Include="Xamarin.Forms" Version="5.0.0.2012" />
   </ItemGroup>
 </Project>

@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <PackageReference Include="Font" Version="0.3.0.3" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
   </ItemGroup>
 
 

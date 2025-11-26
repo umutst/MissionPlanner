@@ -53,6 +53,10 @@
     <EmbeddedResource Include="resources\PentaxMarkernote.txt" />
     <EmbeddedResource Include="resources\SonyMarkernote.txt" />
   </ItemGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+  </ItemGroup>
   <ItemGroup>
     <None Update="exif.xslt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

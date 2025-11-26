@@ -43,6 +43,9 @@
     <WarningsAsErrors>$(WarningsAsErrors)</WarningsAsErrors>
 	  <NoWarn>1701;1702;NU1605</NoWarn>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Update="MavlinkMessagePlugin.cs" />

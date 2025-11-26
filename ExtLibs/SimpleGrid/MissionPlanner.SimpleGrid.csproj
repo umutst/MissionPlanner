@@ -199,6 +199,9 @@
     <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Update="System.Runtime.Serialization">
       <Private>false</Private>
     </Reference>

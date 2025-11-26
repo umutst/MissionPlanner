@@ -143,6 +143,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MQTTnet" Version="3.0.8" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
   </ItemGroup>
   <ItemGroup>
     <Reference Update="System.Runtime.Serialization">
